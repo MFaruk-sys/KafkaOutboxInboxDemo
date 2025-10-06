@@ -1,0 +1,133 @@
+version: '3.8'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    restart: on-failure
+
+  postgres_order:
+    image: debezium/postgres
+    environment:
+      POSTGRES_DB: ordersdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespw
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_order:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ordersdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mssql_payment:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    environment:
+      SA_PASSWORD: "YourStrong!Passw0rd"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssqldata:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash -c \"> /dev/tcp/localhost/1433\" || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  connect:
+    image: debezium/connect:2.2
+    depends_on:
+      - kafka
+      - postgres_order
+    environment:
+      - BOOTSTRAP_SERVERS=kafka:29092
+      - GROUP_ID=1
+      - CONFIG_STORAGE_TOPIC=my_connect_configs
+      - OFFSET_STORAGE_TOPIC=my_connect_offsets
+      - STATUS_STORAGE_TOPIC=my_connect_statuses
+      - KEY_CONVERTER_SCHEMAS_ENABLE=false
+      - VALUE_CONVERTER_SCHEMAS_ENABLE=false
+    ports:
+      - "8083:8083"
+    restart: on-failure
+
+  connector-registrar:
+    image: curlimages/curl:8.3.0
+    depends_on:
+      - connect
+    volumes:
+      - ./debezium-connector:/connector
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "for i in $(seq 1 60); do
+         if curl -sS http://connect:8083/ >/dev/null 2>&1; then
+           echo 'Connect ready, registering connector' && break;
+         fi;
+         echo 'Waiting for connect...' && sleep 5;
+       done;
+       curl -i -X POST -H 'Accept:application/json' -H 'Content-Type:application/json' http://connect:8083/connectors -d @/connector/pg-outbox-connector.json;
+       echo 'Done'; sleep 3600"
+    restart: "no"
+
+  orderservice:
+    build:
+      context: .
+      dockerfile: src/OrderService/Dockerfile
+    depends_on:
+      postgres_order:
+        condition: service_healthy
+    environment:
+      - ConnectionStrings__Postgres=Host=postgres_order;Port=5432;Database=ordersdb;Username=postgres;Password=postgrespw
+    ports:
+      - "5001:8080"
+
+  paymentservice:
+    build:
+      context: .
+      dockerfile: src/PaymentService/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_started
+      mssql_payment:
+        condition: service_healthy
+    environment:
+      - ConnectionStrings__Mssql=Server=mssql_payment,1433;Database=paymentdb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;
+      - Kafka__BootstrapServers=kafka:29092
+    ports:
+      - "5002:8080"
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:latest
+    container_name: kafdrop
+    depends_on:
+      - kafka
+    ports:
+      - 9000:9000
+    environment:
+      KAFKA_BROKERCONNECT: kafka:29092
+
+volumes:
+  pgdata_order:
+  mssqldata:

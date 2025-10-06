@@ -1,0 +1,53 @@
+{
+  "info": {
+    "name": "KafkaOutboxDemo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Order",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"cust-1\",\n  \"amount\": 123.45\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/orders",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            "orders"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Order (sample)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:5001/orders/{{orderId}}",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            "orders",
+            "{{orderId}}"
+          ]
+        }
+      }
+    }
+  ]
+}
