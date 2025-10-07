@@ -25,11 +25,14 @@ services:
     restart: on-failure
 
   postgres_order:
-    image: debezium/postgres
+    image: debezium/postgres:14
     environment:
       POSTGRES_DB: ordersdb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespw
+      # Debezium replication settings
+      POSTGRES_DB_REPLICATION_USER: replication_user
+      POSTGRES_DB_REPLICATION_PASSWORD: replication_pw
     ports:
       - "5432:5432"
     volumes:
@@ -39,6 +42,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_replication_slots=1"
+      - "-c"
+      - "max_wal_senders=1"
+    restart: unless-stopped
 
   mssql_payment:
     image: mcr.microsoft.com/mssql/server:2019-latest
@@ -87,6 +99,7 @@ services:
          fi;
          echo 'Waiting for connect...' && sleep 5;
        done;
+       echo 'Giving Connect API a bit more time...' && sleep 10;
        curl -i -X POST -H 'Accept:application/json' -H 'Content-Type:application/json' http://connect:8083/connectors -d @/connector/pg-outbox-connector.json;
        echo 'Done'; sleep 3600"
     restart: "no"

@@ -10,24 +10,26 @@
         "database.password": "postgrespw",
         "database.dbname": "ordersdb",
         "database.server.name": "postgres",
+
         "table.include.list": "public.outbox_messages",
         "slot.name": "orders_slot",
+
         "transforms": "outbox",
         "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
-      
         "transforms.outbox.table.field.event.id": "Id",
-"transforms.outbox.table.field.event.key": "AggregateId",
-"transforms.outbox.table.field.event.type": "Type",
-"transforms.outbox.table.field.event.payload": "Payload",
-"transforms.outbox.table.field.event.payload.id": "AggregateId",
-"transforms.outbox.route.by.field": "AggregateType",
-
-        "transforms.outbox.table.fields.additional.placement": "type:header:eventType",
+        "transforms.outbox.table.field.event.key": "AggregateId",
+        "transforms.outbox.table.field.event.type": "Type",
+        "transforms.outbox.table.field.event.payload": "Payload",
+        "transforms.outbox.table.field.event.payload.id": "AggregateId",
+        "transforms.outbox.route.by.field": "AggregateType",
+        "transforms.outbox.table.fields.additional.placement": "Type:header:eventType",
         "transforms.outbox.route.topic.replacement": "order_events",
+
         "key.converter": "org.apache.kafka.connect.storage.StringConverter",
         "key.converter.schemas.enable": "false",
         "value.converter": "org.apache.kafka.connect.json.JsonConverter",
         "value.converter.schemas.enable": "false",
         "include.schema.changes": "false"
+       
     }
 }

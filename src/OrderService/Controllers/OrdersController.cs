@@ -18,8 +18,7 @@ public class OrdersController : ControllerBase
         await _db.Orders.AddAsync(o);
 
         var evt = new OrderCreated(o.Id, o.CustomerId, o.Amount, o.CreatedAt);
-        var payload = JsonSerializer.Serialize(evt);
-        var outbox = new OutboxMessage { Id = Guid.NewGuid(), AggregateId = o.Id, Type = nameof(OrderCreated), Payload = payload, OccurredAt = DateTime.UtcNow };
+        var outbox = new OutboxMessage { Id = Guid.NewGuid(), AggregateId = o.Id, Type = nameof(OrderCreated), Payload = evt.GetPayload(), OccurredAt = DateTime.UtcNow };
         await _db.OutboxMessages.AddAsync(outbox);
 
         await _db.SaveChangesAsync();

@@ -22,8 +22,7 @@ builder.Services.AddSwaggerGen();
 var broker = builder.Configuration["Kafka:BootstrapServers"] ?? builder.Configuration["Kafka__BootstrapServers"] ?? "kafka:9092";
 builder.Services.AddMassTransit(x =>
 {
-    x.AddConsumer<OrderCreatedConsumer>();
-    x.UsingInMemory((context, cfg) => cfg.ConfigureEndpoints(context));
+    x.UsingInMemory();
     x.AddRider(r =>
     {
         r.AddConsumer<OrderCreatedConsumer>();
@@ -33,6 +32,7 @@ builder.Services.AddMassTransit(x =>
             k.TopicEndpoint<Shared.Contracts.OrderCreated>("order_events", "payment-group", e =>
             {
                 e.ConfigureConsumer<OrderCreatedConsumer>(context);
+                e.SetValueDeserializer(new KafkaDeserializer<OrderCreated>());
             });
         });
     });
@@ -57,11 +57,15 @@ public class OrderCreatedConsumer : IConsumer<Shared.Contracts.OrderCreated>
     public OrderCreatedConsumer(PaymentDbContext db) => _db = db;
     public async Task Consume(ConsumeContext<Shared.Contracts.OrderCreated> context)
     {
+        Log.Information("Consumed");
         var msg = context.Message;
         var messageId = context.MessageId?.ToString() ?? Guid.NewGuid().ToString();
+        Log.Information("Trying to consume mesage {MessageId}", messageId);
 
         // Inbox pattern: avoid duplicate processing using unique constraint fallback is possible
-        var kafkaKey = context.Headers.Get<string>("kafka_key");
+        //var kafkaKey = context.Headers.Get<string>("kafka_key");
+        var kafkaKey = context.Headers.TryGetHeader("id", out var val) ? val?.ToString() : context.MessageId?.ToString();
+
         if (await _db.InboxMessages.AnyAsync(x => x.MessageId == messageId || x.MessageKey == kafkaKey))
         {
             Log.Information("Duplicate message skipped: {MessageId}", messageId);
